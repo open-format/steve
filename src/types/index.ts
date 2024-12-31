@@ -98,3 +98,8 @@ export interface ScoringRules {
     };
   };
 }
+
+export interface ScoringAction {
+  name: string;
+  handler: (message: Message, meetsConditions: boolean) => Promise<void>;
+}

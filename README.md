@@ -146,7 +146,53 @@ For a message to be scored, it must meet these basic conditions:
 
 You can customize these scoring rules by modifying the `src/config/scoring-rules.json` file. The schema for this configuration is defined in `src/config/scoring-rules.schema.ts`.
 
-### Character Customization
+### Scoring Actions
+
+When a message meets the scoring conditions, you can configure custom actions to be executed. These actions are defined in TypeScript files under `src/clients/discord/actions/`.
+
+Here's an example of a scoring action that sends a cat fact when conditions are met:
+
+```typescript
+// src/clients/discord/actions/scoring_action.ts
+import type { Message, TextChannel } from "discord.js";
+import type { ScoringAction } from "../types";
+import { sendMessageInChunks } from "../utils";
+
+export const scoringAction: ScoringAction = {
+  name: "cat-facts",
+  handler: async (message: Message, meetsConditions: boolean) => {
+    if (!meetsConditions) return;
+
+    const catFactsResponse = await fetch("https://catfact.ninja/fact");
+    const catFactsData = await catFactsResponse.json();
+    const catFact = catFactsData.fact;
+
+    await sendMessageInChunks(
+      message.channel as TextChannel,
+      `You met the scoring conditions! Here's a cat fact: ${catFact}`,
+      message.id,
+      []
+    );
+  },
+};
+```
+
+To create your own scoring action:
+
+1. Create a new file in `src/clients/discord/actions/`
+2. Define your action using the `ScoringAction` interface:
+   ```typescript
+   interface ScoringAction {
+     name: string;
+     handler: (message: Message, meetsConditions: boolean) => Promise<void>;
+   }
+   ```
+3. Export your action as the default export
+4. The handler will be called automatically when a message meets the scoring conditions
+
+Your action can do anything you want - send messages, add reactions, update a database, or integrate with external services.
+
+## Character Customization
 
 You can customize the AI character by modifying `src/characters/default.json`. The character file supports:
 

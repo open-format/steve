@@ -25,6 +25,7 @@ import {
   type TextChannel,
   type User,
 } from "discord.js";
+import { scoringAction } from "./actions/scoring_action";
 import { AttachmentManager } from "./attachments";
 import {
   IGNORE_RESPONSE_WORDS,
@@ -297,7 +298,7 @@ export class MessageManager {
 
       if (agentUserState === "FOLLOWED") {
         shouldRespond = true; // Always respond in followed rooms
-      } else if ((!shouldRespond && hasInterest) || (shouldRespond && !hasInterest)) {
+      } else {
         shouldRespond = await this._shouldRespond(message, state);
       }
 
@@ -846,18 +847,10 @@ export class MessageManager {
       unique: true,
     };
 
-    const memory = await this.runtime.messageManager.createMemory(scoringMemory);
+    await this.runtime.messageManager.createMemory(scoringMemory);
 
-    const catFactsResponse = await fetch("https://catfact.ninja/fact");
-    const catFactsData = await catFactsResponse.json();
-    const catFact = catFactsData.fact;
+    await scoringAction.handler(message, meetsConditions);
 
-    await sendMessageInChunks(
-      message.channel as TextChannel,
-      `You met the scoring conditions for ${message.content.slice(0, 10)}! Here's a cat fact: ${catFact}`,
-      message.id,
-      []
-    );
     return false; // Return false to prevent further processing
   }
 
