@@ -1,0 +1,31 @@
+{
+  "name": "steve",
+  "version": "0.0.1",
+  "description": "",
+  "type": "module",
+  "main": "src/agent/index.ts",
+  "scripts": {
+    "start": "bun run src/agent/index.ts",
+    "dev": "bun --watch src/agent/index.ts",
+    "build": "bun run build",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "Open Format",
+  "license": "ISC",
+  "devDependencies": {
+    "@flydotio/dockerfile": "^0.5.9",
+    "@types/bun": "latest",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.18.0",
+    "@elizaos/adapter-postgres": "^0.1.7-alpha.2",
+    "@elizaos/client-direct": "^0.1.7-alpha.2",
+    "@elizaos/core": "^0.1.7-alpha.2",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
+    "fluent-ffmpeg": "^2.1.3"
+  }
+}

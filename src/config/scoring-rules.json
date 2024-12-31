@@ -1,0 +1,55 @@
+{
+  "conditions": {
+    "minLength": 1,
+    "minReactions": 2,
+    "minQualityScore": 0,
+    "minTrustScore": 0
+  },
+  "scoring": {
+    "qualityFactors": {
+      "messageLength": {
+        "weight": 0.2,
+        "thresholds": {
+          "min": 5,
+          "ideal": 100
+        }
+      },
+      "uniqueWords": {
+        "weight": 0.2,
+        "thresholds": {
+          "min": 3,
+          "ideal": 20
+        }
+      },
+      "relevance": {
+        "weight": 0.3,
+        "factors": ["channelTopicMatch", "keywordMatch"]
+      },
+      "engagement": {
+        "weight": 0.3,
+        "factors": ["reactions", "replies"]
+      }
+    },
+    "trustFactors": {
+      "accountAge": {
+        "weight": 0.2,
+        "thresholds": {
+          "min": "1d",
+          "ideal": "30d"
+        }
+      },
+      "previousContributions": {
+        "weight": 0.3,
+        "factors": ["qualityAverage", "quantity"]
+      },
+      "communityStanding": {
+        "weight": 0.3,
+        "factors": ["roles", "reputation"]
+      },
+      "reportHistory": {
+        "weight": 0.2,
+        "factors": ["violations", "warnings"]
+      }
+    }
+  }
+}

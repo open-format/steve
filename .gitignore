@@ -1,0 +1,4 @@
+.env
+fly.toml
+node_modules
+dist
