@@ -1,0 +1,1 @@
+export { scoringProvider } from "./scoringProvider";

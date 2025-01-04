@@ -1,8 +1,8 @@
 {
   "name": "steve",
-  "plugins": [],
+  "plugins": ["@plugins/scoring"],
   "clients": ["discord"],
-  "modelProvider": "openai",
+  "modelProvider": "anthropic",
   "settings": {
     "secrets": {}
   },

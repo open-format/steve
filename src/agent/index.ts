@@ -120,13 +120,23 @@ export async function loadCharacters(charactersArg: string): Promise<Character[]
           };
         }
 
-        // Handle plugins
-        if (isAllStrings(character.plugins)) {
-          elizaLogger.info("Plugins are: ", character.plugins);
+        // Check if plugins are loaded correctly
+        if (character.plugins) {
+          console.log("Plugins are: ", character.plugins);
           const importedPlugins = await Promise.all(
             character.plugins.map(async (plugin) => {
+              console.log("Importing plugin: ", plugin);
+              // Handle local package imports
+              if (plugin.startsWith("@plugins/")) {
+                const packageName = plugin.replace("@plugins/", "");
+                const importedPlugin = await import(`../plugins/${packageName}/index.ts`);
+                console.log("Imported plugin: ", importedPlugin);
+                return importedPlugin.scoringPlugin; // or whatever export you need
+              }
+              // Handle other imports (npm packages etc)
               const importedPlugin = await import(plugin);
-              return importedPlugin.default;
+              console.log("Imported plugin: ", importedPlugin);
+              return importedPlugin;
             })
           );
           character.plugins = importedPlugins;

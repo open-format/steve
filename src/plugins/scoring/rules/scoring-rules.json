@@ -1,6 +1,6 @@
 {
   "conditions": {
-    "minLength": 1,
+    "minLength": 10,
     "minReactions": 2,
     "minQualityScore": 0,
     "minTrustScore": 0
