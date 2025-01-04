@@ -1,6 +1,6 @@
 {
   "name": "steve",
-  "plugins": ["@plugins/scoring"],
+  "plugins": ["scoring"],
   "clients": ["discord"],
   "modelProvider": "anthropic",
   "settings": {

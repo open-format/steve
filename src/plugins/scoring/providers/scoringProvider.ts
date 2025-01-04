@@ -1,6 +1,5 @@
 import { type IAgentRuntime, type Memory, type Provider, type State, elizaLogger } from "@elizaos/core";
-import type { Message } from "discord.js";
-import { DiscordClient } from "../../../clients/discord";
+import type { Client as DiscordClient, Message } from "discord.js";
 import { ScoringService } from "../service";
 
 interface DiscordMessageUrlParts {
@@ -82,7 +81,7 @@ export async function getDiscordMessageFromMemory(runtime: IAgentRuntime, memory
     const { guildId, channelId, messageId } = parsedUrl;
 
     // Retrieve Discord client from runtime
-    const { client: discordClient } = new DiscordClient(runtime);
+    const discordClient: DiscordClient = runtime.clients.discord.client;
 
     if (!discordClient) {
       elizaLogger.error("Discord client not initialized");

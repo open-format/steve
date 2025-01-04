@@ -124,26 +124,31 @@ export async function loadCharacters(charactersArg: string): Promise<Character[]
         if (character.plugins) {
           console.log("Plugins are: ", character.plugins);
           const importedPlugins = await Promise.all(
-            character.plugins.map(async (plugin) => {
-              console.log("Importing plugin: ", plugin);
-              // Handle local package imports
-              if (plugin.startsWith("@plugins/")) {
-                const packageName = plugin.replace("@plugins/", "");
-                const importedPlugin = await import(`../plugins/${packageName}/index.ts`);
-                console.log("Imported plugin: ", importedPlugin);
-                return importedPlugin.scoringPlugin; // or whatever export you need
+            character.plugins.map(async (pluginName) => {
+              console.log("Importing plugin: ", pluginName);
+              try {
+                // Handle local package imports
+
+                const importedPlugin = await import(`../plugins/${pluginName}/index.ts`);
+                console.log("Imported local plugin: ", importedPlugin);
+                return importedPlugin.scoringPlugin || importedPlugin;
+              } catch (error) {
+                elizaLogger.error(`Error importing plugin ${pluginName}:`, error);
+                return null;
               }
-              // Handle other imports (npm packages etc)
-              const importedPlugin = await import(plugin);
-              console.log("Imported plugin: ", importedPlugin);
-              return importedPlugin;
             })
           );
-          character.plugins = importedPlugins;
-        }
 
-        loadedCharacters.push(character);
-        elizaLogger.info(`Successfully loaded character from: ${resolvedPath}`);
+          // Filter out any failed imports and log a warning
+          character.plugins = importedPlugins.filter((plugin) => plugin !== null);
+
+          if (character.plugins.length === 0) {
+            elizaLogger.warn("No plugins could be loaded");
+          }
+
+          loadedCharacters.push(character);
+          elizaLogger.info(`Successfully loaded character from: ${resolvedPath}`);
+        }
       } catch (e) {
         elizaLogger.error(`Error parsing character from ${resolvedPath}: ${e}`);
         process.exit(1);
@@ -324,7 +329,6 @@ async function startAgent(character: Character, directClient: DirectClient): Pro
     return runtime;
   } catch (error) {
     elizaLogger.error(`Error starting agent for character ${character.name}:`, error);
-    elizaLogger.error(error);
     if (db) {
       await db.close();
     }
