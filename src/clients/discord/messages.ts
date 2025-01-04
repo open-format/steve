@@ -243,12 +243,6 @@ export class MessageManager {
       };
 
       if (content.text) {
-        elizaLogger.info("Adding embedding to memory", {
-          memoryId: memory.id,
-          text: memory.agentId,
-          roomId: memory.roomId,
-          userId: memory.userId,
-        });
         await this.runtime.messageManager.addEmbeddingToMemory(memory);
         await this.runtime.messageManager.createMemory(memory);
 
@@ -308,7 +302,12 @@ export class MessageManager {
           template: this.runtime.character.templates?.discordMessageHandlerTemplate || discordMessageHandlerTemplate,
         });
 
-        const responseContent = await this._generateResponse(memory, state, context);
+        // simulate discord typing while generating a response
+        const stopTyping = this.simulateTyping(message);
+
+        const responseContent = await this._generateResponse(memory, state, context).finally(() => {
+          stopTyping();
+        });
 
         responseContent.text = responseContent.text?.trim();
         responseContent.inReplyTo = stringToUuid(message.id + "-" + this.runtime.agentId);
@@ -1012,5 +1011,28 @@ export class MessageManager {
 
     const data = await response.json();
     return data.username;
+  }
+
+  /**
+   * Simulate discord typing while generating a response;
+   * returns a function to interrupt the typing loop
+   *
+   * @param message
+   */
+  private simulateTyping(message: DiscordMessage) {
+    let typing = true;
+
+    const typingLoop = async () => {
+      while (typing) {
+        await message.channel.sendTyping();
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    };
+
+    typingLoop();
+
+    return function stopTyping() {
+      typing = false;
+    };
   }
 }
