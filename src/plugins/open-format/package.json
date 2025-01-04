@@ -1,5 +1,5 @@
 {
-  "name": "scoring",
+  "name": "open-format",
   "module": "index.ts",
   "type": "module",
   "devDependencies": {

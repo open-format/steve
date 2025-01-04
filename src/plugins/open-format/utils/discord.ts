@@ -1,6 +1,5 @@
-import { type IAgentRuntime, type Memory, type Provider, type State, elizaLogger } from "@elizaos/core";
+import { type IAgentRuntime, type Memory, elizaLogger } from "@elizaos/core";
 import type { Client as DiscordClient, Message } from "discord.js";
-import { ScoringService } from "../service";
 
 interface DiscordMessageUrlParts {
   guildId: string;
@@ -8,7 +7,7 @@ interface DiscordMessageUrlParts {
   messageId: string;
 }
 
-function parseDiscordMessageUrl(url: string): DiscordMessageUrlParts | null {
+export function parseDiscordMessageUrl(url: string): DiscordMessageUrlParts | null {
   try {
     // Validate input
     if (!url) {
@@ -116,40 +115,3 @@ export async function getDiscordMessageFromMemory(runtime: IAgentRuntime, memory
     return null;
   }
 }
-
-export const scoringProvider: Provider = {
-  get: async (runtime: IAgentRuntime, memory: Memory, state?: State) => {
-    try {
-      // Retrieve Discord message
-      const message = await getDiscordMessageFromMemory(runtime, memory);
-
-      if (!message) {
-        return "Unable to retrieve Discord message";
-      }
-
-      // Initialize scoring service
-      const scoringService = new ScoringService(runtime);
-
-      // Evaluate the message
-      const score = await scoringService.evaluateMessage(message);
-
-      // Log the scoring details
-      elizaLogger.log("Scoring provider", {
-        messageId: message.id,
-        score,
-        userId: message.author.id,
-      });
-
-      // Return the score as a string for context
-      return `Message Scoring Details:
-- Quality Score: ${score.qualityScore}
-- Trust Score: ${score.trustScore}
-- Meets Conditions: ${score.meetsConditions}
-- Message ID: ${message.id}
-- User ID: ${message.author.id}`;
-    } catch (error) {
-      elizaLogger.error("Error in scoring provider", error);
-      return "Scoring temporarily unavailable";
-    }
-  },
-};

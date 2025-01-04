@@ -1,7 +1,7 @@
 import { type IAgentRuntime, elizaLogger } from "@elizaos/core";
 import type { Message } from "discord.js";
-import { loadScoringRules } from "./rules/config-loader";
-import type { ScoringRules } from "./rules/scoring-rules.schema";
+import { loadScoringRules } from "../rules/config-loader";
+import type { ScoringRules } from "../rules/scoring-rules.schema";
 
 export class ScoringService {
   private rules: ScoringRules;

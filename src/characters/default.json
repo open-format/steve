@@ -1,6 +1,6 @@
 {
   "name": "steve",
-  "plugins": ["scoring"],
+  "plugins": ["open-format"],
   "clients": ["discord"],
   "modelProvider": "anthropic",
   "settings": {

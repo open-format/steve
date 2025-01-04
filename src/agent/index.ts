@@ -1,8 +1,8 @@
-import { PostgresDatabaseAdapter } from "@elizaos/adapter-postgres";
-import { DirectClient } from "@elizaos/client-direct";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PostgresDatabaseAdapter } from "@elizaos/adapter-postgres";
+import { DirectClient } from "@elizaos/client-direct";
 import { DiscordClientInterface } from "../clients/discord";
 
 import {
