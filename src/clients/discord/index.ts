@@ -78,8 +78,7 @@ export class DiscordClient extends EventEmitter {
     // When joining to a new server
     this.client.on("guildCreate", this.handleGuildCreate.bind(this));
 
-    this.client.on(Events.MessageReactionAdd, this.messageManager.handleReactionAdd.bind(this.messageManager));
-
+    this.client.on(Events.MessageReactionAdd, this.handleReactionAdd.bind(this));
     this.client.on(Events.MessageReactionRemove, this.handleReactionRemove.bind(this));
 
     // Handle voice events with the voice manager
@@ -162,6 +161,101 @@ export class DiscordClient extends EventEmitter {
       `https://discord.com/api/oauth2/authorize?client_id=${readyClient.user?.id}&permissions=${requiredPermissions}&scope=bot%20applications.commands`
     );
     await this.onReady();
+  }
+
+  async handleReactionAdd(reaction: MessageReaction, user: User) {
+    try {
+      elizaLogger.log("Reaction added");
+
+      // Early returns
+      if (!reaction || !user) {
+        elizaLogger.warn("Invalid reaction or user");
+        return;
+      }
+
+      // Get emoji info
+      let emoji = reaction.emoji.name;
+      if (!emoji && reaction.emoji.id) {
+        emoji = `<:${reaction.emoji.name}:${reaction.emoji.id}>`;
+      }
+
+      // Fetch full message if partial
+      if (reaction.partial) {
+        try {
+          await reaction.fetch();
+        } catch (error) {
+          elizaLogger.error("Failed to fetch partial reaction:", error);
+          return;
+        }
+      }
+
+      // Generate IDs with timestamp to ensure uniqueness
+      const timestamp = Date.now();
+      const roomId = stringToUuid(`${reaction.message.channel.id}-${this.runtime.agentId}`);
+      const userIdUUID = stringToUuid(`${user.id}-${this.runtime.agentId}`);
+      const reactionUUID = stringToUuid(
+        `${reaction.message.id}-${user.id}-${emoji}-${timestamp}-${this.runtime.agentId}`
+      );
+
+      // Validate IDs
+      if (!userIdUUID || !roomId) {
+        elizaLogger.error("Invalid user ID or room ID", {
+          userIdUUID,
+          roomId,
+        });
+        return;
+      }
+
+      // Process message content
+      const messageContent = reaction.message.content || "";
+      const truncatedContent = messageContent.length > 100 ? `${messageContent.substring(0, 100)}...` : messageContent;
+      const reactionMessage = `*<${emoji}>: "${truncatedContent}"*`;
+
+      // Get user info
+      const userName = reaction.message.author?.username || "unknown";
+      const name = reaction.message.author?.displayName || userName;
+
+      // Ensure connection
+      await this.runtime.ensureConnection(userIdUUID, roomId, userName, name, "discord");
+
+      // Create memory with retry logic
+      const memory = {
+        id: reactionUUID,
+        userId: userIdUUID,
+        agentId: this.runtime.agentId,
+        content: {
+          text: reactionMessage,
+          source: "discord",
+          url: reaction.message.url,
+          inReplyTo: stringToUuid(`${reaction.message.id}-${this.runtime.agentId}`),
+        },
+        roomId,
+        createdAt: timestamp,
+        embedding: getEmbeddingZeroVector(),
+      };
+
+      try {
+        await this.runtime.messageManager.createMemory(memory);
+        elizaLogger.debug("Reaction memory created", {
+          reactionId: reactionUUID,
+          emoji,
+          userId: user.id,
+        });
+
+        await this.runtime.evaluate(memory, {}, true);
+      } catch (error) {
+        if (error.code === "23505") {
+          // Duplicate key error
+          elizaLogger.warn("Duplicate reaction memory, skipping", {
+            reactionId: reactionUUID,
+          });
+          return;
+        }
+        throw error; // Re-throw other errors
+      }
+    } catch (error) {
+      elizaLogger.error("Error handling reaction:", error);
+    }
   }
 
   async handleReactionRemove(reaction: MessageReaction, user: User) {

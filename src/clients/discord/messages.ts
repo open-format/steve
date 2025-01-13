@@ -12,31 +12,25 @@ import {
   type State,
   type UUID,
   composeContext,
+  composeRandomUser,
   elizaLogger,
   generateMessageResponse,
+  generateShouldRespond,
   getEmbeddingZeroVector,
   stringToUuid,
 } from "@elizaos/core";
-import {
-  ChannelType,
-  type Client,
-  type Message as DiscordMessage,
-  type MessageReaction,
-  type TextChannel,
-  type User,
-} from "discord.js";
-import { scoringAction } from "./actions/scoring_action";
+import { ChannelType, type Client, type Message as DiscordMessage, type TextChannel } from "discord.js";
 import { AttachmentManager } from "./attachments";
 import {
   IGNORE_RESPONSE_WORDS,
   LOSE_INTEREST_WORDS,
   MESSAGE_CONSTANTS,
   MESSAGE_LENGTH_THRESHOLDS,
+  RESPONSE_CHANCES,
   TEAM_COORDINATION,
   TIMING_CONSTANTS,
 } from "./constants";
-import { ScoringService } from "./scoring";
-import { discordMessageHandlerTemplate } from "./templates";
+import { discordMessageHandlerTemplate, discordShouldRespondTemplate } from "./templates";
 import { canSendMessage, cosineSimilarity, sendMessageInChunks } from "./utils";
 import type { VoiceManager } from "./voice";
 
@@ -60,15 +54,15 @@ export class MessageManager {
   private runtime: IAgentRuntime;
   private attachmentManager: AttachmentManager;
   private interestChannels: InterestChannels = {};
+  private discordClient: any;
   private voiceManager: VoiceManager;
-  private scoringService: ScoringService;
 
   constructor(discordClient: any, voiceManager: VoiceManager) {
     this.client = discordClient.client;
     this.voiceManager = voiceManager;
+    this.discordClient = discordClient;
     this.runtime = discordClient.runtime;
     this.attachmentManager = new AttachmentManager(this.runtime);
-    this.scoringService = new ScoringService();
   }
 
   async handleMessage(message: DiscordMessage) {
@@ -298,7 +292,7 @@ export class MessageManager {
 
       if (agentUserState === "FOLLOWED") {
         shouldRespond = true; // Always respond in followed rooms
-      } else {
+      } else if ((!shouldRespond && hasInterest) || (shouldRespond && !hasInterest)) {
         shouldRespond = await this._shouldRespond(message, state);
       }
 
@@ -308,7 +302,12 @@ export class MessageManager {
           template: this.runtime.character.templates?.discordMessageHandlerTemplate || discordMessageHandlerTemplate,
         });
 
-        const responseContent = await this._generateResponse(memory, state, context);
+        // simulate discord typing while generating a response
+        const stopTyping = this.simulateTyping(message);
+
+        const responseContent = await this._generateResponse(memory, state, context).finally(() => {
+          stopTyping();
+        });
 
         responseContent.text = responseContent.text?.trim();
         responseContent.inReplyTo = stringToUuid(message.id + "-" + this.runtime.agentId);
@@ -799,59 +798,177 @@ export class MessageManager {
   }
 
   private async _shouldRespond(message: DiscordMessage, state: State): Promise<boolean> {
-    // First check basic conditions
     if (message.author.id === this.client.user?.id) return false;
+    // if (message.author.bot) return false;
 
-    // Evaluate message against scoring rules
-    const { meetsConditions } = await this.scoringService.evaluateMessage(message);
-
-    if (!meetsConditions) {
-      return false;
+    // Honor mentions-only mode
+    if (this.runtime.character.clientConfig?.discord?.shouldRespondOnlyToMentions) {
+      return this._isMessageForMe(message);
     }
 
-    // Use channel ID for the base roomId (for foreign key constraint)
-    const channelRoomId = stringToUuid(`${message.channel.id}-${this.runtime.agentId}`);
+    const channelState = this.interestChannels[message.channelId];
 
-    // Create a unique ID for this specific message's scoring
-    const messageScoreId = stringToUuid(message.id + message.author.id + this.runtime.agentId);
+    // Check if team member has direct interest first
+    if (
+      this.runtime.character.clientConfig?.discord?.isPartOfTeam &&
+      !this._isTeamLeader() &&
+      this._isRelevantToTeamMember(message.content, message.channelId)
+    ) {
+      return true;
+    }
 
-    // Check if we've already processed this specific message
-    const existingMemories = await this.runtime.messageManager.getMemories({
-      roomId: channelRoomId,
-      userId: stringToUuid(message.author.id),
-      unique: true,
+    try {
+      // Team-based response logic
+      if (this.runtime.character.clientConfig?.discord?.isPartOfTeam) {
+        // Team leader coordination
+        if (this._isTeamLeader() && this._isTeamCoordinationRequest(message.content)) {
+          return true;
+        }
+
+        if (!this._isTeamLeader() && this._isRelevantToTeamMember(message.content, message.channelId)) {
+          // Add small delay for non-leader responses
+          await new Promise((resolve) => setTimeout(resolve, TIMING_CONSTANTS.TEAM_MEMBER_DELAY)); //1.5 second delay
+
+          // If leader has responded in last few seconds, reduce chance of responding
+
+          if (channelState?.messages?.length) {
+            const recentMessages = channelState.messages.slice(-MESSAGE_CONSTANTS.RECENT_MESSAGE_COUNT);
+            const leaderResponded = recentMessages.some(
+              (m) =>
+                m.userId === this.runtime.character.clientConfig?.discord?.teamLeaderId &&
+                Date.now() - channelState.lastMessageSent < 3000
+            );
+
+            if (leaderResponded) {
+              // 50% chance to respond if leader just did
+              return Math.random() > RESPONSE_CHANCES.AFTER_LEADER;
+            }
+          }
+
+          return true;
+        }
+
+        // If I'm the leader but message doesn't match my keywords, add delay and check for team responses
+        if (this._isTeamLeader() && !this._isRelevantToTeamMember(message.content, message.channelId)) {
+          const randomDelay =
+            Math.floor(Math.random() * (TIMING_CONSTANTS.LEADER_DELAY_MAX - TIMING_CONSTANTS.LEADER_DELAY_MIN)) +
+            TIMING_CONSTANTS.LEADER_DELAY_MIN; // 2-4 second random delay
+          await new Promise((resolve) => setTimeout(resolve, randomDelay));
+
+          // After delay, check if another team member has already responded
+          if (channelState?.messages?.length) {
+            const recentResponses = channelState.messages.slice(-MESSAGE_CONSTANTS.RECENT_MESSAGE_COUNT);
+            const otherTeamMemberResponded = recentResponses.some(
+              (m) => m.userId !== this.client.user?.id && this._isTeamMember(m.userId)
+            );
+
+            if (otherTeamMemberResponded) {
+              return false;
+            }
+          }
+        }
+
+        // Update current handler if we're mentioned
+        if (this._isMessageForMe(message)) {
+          const channelState = this.interestChannels[message.channelId];
+          if (channelState) {
+            channelState.currentHandler = this.client.user?.id;
+            channelState.lastMessageSent = Date.now();
+          }
+          return true;
+        }
+
+        // Don't respond if another teammate is handling the conversation
+        if (channelState?.currentHandler) {
+          if (channelState.currentHandler !== this.client.user?.id && this._isTeamMember(channelState.currentHandler)) {
+            return false;
+          }
+        }
+
+        // Natural conversation cadence
+        if (!this._isMessageForMe(message) && channelState) {
+          // Count our recent messages
+          const recentMessages = channelState.messages.slice(-MESSAGE_CONSTANTS.CHAT_HISTORY_COUNT);
+          const ourMessageCount = recentMessages.filter((m) => m.userId === this.client.user?.id).length;
+
+          // Reduce responses if we've been talking a lot
+          if (ourMessageCount > 2) {
+            // Exponentially decrease chance to respond
+            const responseChance = Math.pow(0.5, ourMessageCount - 2);
+            if (Math.random() > responseChance) {
+              return false;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      elizaLogger.error("Error in _shouldRespond team processing:", {
+        error,
+        agentId: this.runtime.agentId,
+        channelId: message.channelId,
+      });
+    }
+
+    // Otherwise do context check
+    if (channelState?.previousContext) {
+      const shouldRespondContext = await this._shouldRespondBasedOnContext(message, channelState);
+      if (!shouldRespondContext) {
+        delete this.interestChannels[message.channelId];
+        return false;
+      }
+    }
+
+    if (message.mentions.has(this.client.user?.id as string)) return true;
+
+    const guild = message.guild;
+    const member = guild?.members.cache.get(this.client.user?.id as string);
+    const nickname = member?.nickname;
+
+    if (
+      message.content.toLowerCase().includes(this.client.user?.username.toLowerCase() as string) ||
+      message.content.toLowerCase().includes(this.client.user?.tag.toLowerCase() as string) ||
+      (nickname && message.content.toLowerCase().includes(nickname.toLowerCase()))
+    ) {
+      return true;
+    }
+
+    if (!message.guild) {
+      return true;
+    }
+
+    // If none of the above conditions are met, use the generateText to decide
+    const shouldRespondContext = composeContext({
+      state,
+      template:
+        this.runtime.character.templates?.discordShouldRespondTemplate ||
+        this.runtime.character.templates?.shouldRespondTemplate ||
+        composeRandomUser(discordShouldRespondTemplate, 2),
     });
 
-    // If we've already processed this message, return false
-    if (existingMemories?.some((memory) => memory.id === messageScoreId)) {
+    const response = await generateShouldRespond({
+      runtime: this.runtime,
+      context: shouldRespondContext,
+      modelClass: ModelClass.SMALL,
+    });
+
+    if (response === "RESPOND") {
+      if (channelState) {
+        channelState.previousContext = {
+          content: message.content,
+          timestamp: Date.now(),
+        };
+      }
+
+      return true;
+    } else if (response === "IGNORE") {
+      return false;
+    } else if (response === "STOP") {
+      delete this.interestChannels[message.channelId];
+      return false;
+    } else {
+      console.error("Invalid response from response generateText:", response);
       return false;
     }
-
-    // Store the scoring result in memory if it doesn't exist yet
-    const scoringMemory: Memory = {
-      id: messageScoreId, // Use the message-specific ID
-      userId: stringToUuid(message.author.id),
-      agentId: this.runtime.agentId,
-      content: {
-        text: `Message met scoring conditions: ${message.content}`,
-        source: "discord",
-        inReplyTo: stringToUuid(messageScoreId),
-        metadata: {
-          scoringResult: meetsConditions,
-          messageId: message.id, // Store original message ID for reference
-        },
-      },
-      roomId: channelRoomId, // Use the channel roomId for foreign key
-      embedding: getEmbeddingZeroVector(),
-      createdAt: Date.now(),
-      unique: true,
-    };
-
-    await this.runtime.messageManager.createMemory(scoringMemory);
-
-    await scoringAction.handler(message, meetsConditions);
-
-    return false; // Return false to prevent further processing
   }
 
   private async _generateResponse(message: Memory, state: State, context: string): Promise<Content> {
@@ -896,104 +1013,26 @@ export class MessageManager {
     return data.username;
   }
 
-  async handleReactionAdd(reaction: MessageReaction, user: User) {
-    // Ignore reactions from the bot itself
-    if (user.id === this.client.user?.id) return;
+  /**
+   * Simulate discord typing while generating a response;
+   * returns a function to interrupt the typing loop
+   *
+   * @param message
+   */
+  private simulateTyping(message: DiscordMessage) {
+    let typing = true;
 
-    // Fetch the full message if it's partial
-    if (reaction.partial) {
-      try {
-        await reaction.fetch();
-      } catch (error) {
-        console.error("Error fetching reaction:", error);
-        return;
+    const typingLoop = async () => {
+      while (typing) {
+        await message.channel.sendTyping();
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       }
-    }
-
-    const message = reaction.message;
-    const channelId = message.channel.id;
-    const roomId = stringToUuid(channelId + "-" + this.runtime.agentId);
-    const userId = stringToUuid(user.id);
-
-    // Ensure connection exists
-    await this.runtime.ensureConnection(userId, roomId, user.username, user.displayName, "discord");
-
-    // Create a special content object for reactions
-    const content: Content = {
-      text: `reacted with ${reaction.emoji.name} to message: "${message.content}"`,
-      source: "discord",
-      url: message.url,
-      action: "REACT",
-      inReplyTo: stringToUuid(message.id + "-" + this.runtime.agentId),
     };
 
-    // Create memory for the reaction
-    const memory: Memory = {
-      id: stringToUuid(`${message.id}-reaction-${Date.now()}-${this.runtime.agentId}`),
-      userId,
-      agentId: this.runtime.agentId,
-      roomId,
-      content,
-      createdAt: Date.now(),
+    typingLoop();
+
+    return function stopTyping() {
+      typing = false;
     };
-
-    await this.runtime.messageManager.addEmbeddingToMemory(memory);
-    await this.runtime.messageManager.createMemory(memory);
-
-    // Compose state and generate response if needed
-    let state = await this.runtime.composeState(
-      { content, userId, agentId: this.runtime.agentId, roomId },
-      {
-        discordClient: this.client,
-        discordMessage: message,
-        agentName: this.runtime.character.name || this.client.user?.displayName,
-      }
-    );
-
-    // You might want to add specific logic here to determine if/how to respond to reactions
-    const shouldRespond = await this._shouldRespond(message, state);
-
-    if (shouldRespond) {
-      const context = composeContext({
-        state,
-        template: this.runtime.character.templates?.discordMessageHandlerTemplate || discordMessageHandlerTemplate,
-      });
-
-      const responseContent = await this._generateResponse(memory, state, context);
-      if (!responseContent?.text) return;
-
-      // Send the response
-      const callback: HandlerCallback = async (content: Content, files: any[]) => {
-        try {
-          const messages = await sendMessageInChunks(message.channel as TextChannel, content.text, message.id, files);
-
-          // Create memories for the response messages
-          const responseMemories = messages.map((m) => ({
-            id: stringToUuid(m.id + "-" + this.runtime.agentId),
-            userId: this.runtime.agentId,
-            agentId: this.runtime.agentId,
-            content: { ...content, url: m.url },
-            roomId,
-            embedding: getEmbeddingZeroVector(),
-            createdAt: m.createdTimestamp,
-          }));
-
-          for (const m of responseMemories) {
-            await this.runtime.messageManager.createMemory(m);
-          }
-
-          return responseMemories;
-        } catch (error) {
-          console.error("Error sending message:", error);
-          return [];
-        }
-      };
-
-      const responseMessages = await callback(responseContent);
-      state = await this.runtime.updateRecentMessageState(state);
-      await this.runtime.processActions(memory, responseMessages, state, callback);
-    }
-
-    await this.runtime.evaluate(memory, state, shouldRespond);
   }
 }

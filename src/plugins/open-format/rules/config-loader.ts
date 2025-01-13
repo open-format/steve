@@ -1,13 +1,20 @@
 import { elizaLogger } from "@elizaos/core";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { type ScoringRules, scoringRulesSchema } from "./scoring-rules.schema";
 
 export function loadScoringRules(environment = process.env.NODE_ENV): ScoringRules {
   try {
+    // Get the directory path in a way that works with both ESM and CommonJS
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+
     // Load the appropriate config file based on environment
-    const configPath = join(__dirname, `scoring-rules.${environment}.json`);
-    const fallbackPath = join(__dirname, "scoring-rules.json");
+    const configPath = join(currentDir, `scoring-rules.${environment}.json`);
+    const fallbackPath = join(currentDir, "scoring-rules.json");
+
+    elizaLogger.debug("configPath", configPath);
+    elizaLogger.debug("fallbackPath", fallbackPath);
 
     let configFile: string;
     try {
@@ -26,7 +33,7 @@ export function loadScoringRules(environment = process.env.NODE_ENV): ScoringRul
 
     return result.data;
   } catch (error) {
-    elizaLogger.error("Error loading scoring rules:", error);
+    elizaLogger.error("Error loading scoring ruless:", error);
     throw error;
   }
 }

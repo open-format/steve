@@ -120,20 +120,35 @@ export async function loadCharacters(charactersArg: string): Promise<Character[]
           };
         }
 
-        // Handle plugins
-        if (isAllStrings(character.plugins)) {
-          elizaLogger.info("Plugins are: ", character.plugins);
+        // Check if plugins are loaded correctly
+        if (character.plugins) {
+          console.log("Plugins are: ", character.plugins);
           const importedPlugins = await Promise.all(
-            character.plugins.map(async (plugin) => {
-              const importedPlugin = await import(plugin);
-              return importedPlugin.default;
+            character.plugins.map(async (pluginName) => {
+              console.log("Importing plugin: ", pluginName);
+              try {
+                // Handle local package imports
+
+                const importedPlugin = await import(`../plugins/${pluginName}/index.ts`);
+                console.log("Imported local plugin: ", importedPlugin);
+                return importedPlugin.scoringPlugin || importedPlugin;
+              } catch (error) {
+                elizaLogger.error(`Error importing plugin ${pluginName}:`, error);
+                return null;
+              }
             })
           );
-          character.plugins = importedPlugins;
-        }
 
-        loadedCharacters.push(character);
-        elizaLogger.info(`Successfully loaded character from: ${resolvedPath}`);
+          // Filter out any failed imports and log a warning
+          character.plugins = importedPlugins.filter((plugin) => plugin !== null);
+
+          if (character.plugins.length === 0) {
+            elizaLogger.warn("No plugins could be loaded");
+          }
+
+          loadedCharacters.push(character);
+          elizaLogger.info(`Successfully loaded character from: ${resolvedPath}`);
+        }
       } catch (e) {
         elizaLogger.error(`Error parsing character from ${resolvedPath}: ${e}`);
         process.exit(1);
@@ -306,6 +321,14 @@ async function startAgent(character: Character, directClient: DirectClient): Pro
     runtime.clients = await initializeClients(character, runtime);
 
     // add to container
+    // upload some agent functionality into directClient
+    directClient.startAgent = async (character: Character) => {
+      // wrap it so we don't have to inject directClient later
+      return startAgent(character, directClient);
+    };
+
+    directClient.start(3000);
+
     directClient.registerAgent(runtime);
 
     // report to console
@@ -314,7 +337,6 @@ async function startAgent(character: Character, directClient: DirectClient): Pro
     return runtime;
   } catch (error) {
     elizaLogger.error(`Error starting agent for character ${character.name}:`, error);
-    elizaLogger.error(error);
     if (db) {
       await db.close();
     }
