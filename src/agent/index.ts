@@ -1,8 +1,8 @@
+import { PostgresDatabaseAdapter } from "@elizaos/adapter-postgres";
+import { DirectClient } from "@elizaos/client-direct";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PostgresDatabaseAdapter } from "@elizaos/adapter-postgres";
-import { DirectClient } from "@elizaos/client-direct";
 import { DiscordClientInterface } from "../clients/discord";
 
 import {
@@ -321,6 +321,14 @@ async function startAgent(character: Character, directClient: DirectClient): Pro
     runtime.clients = await initializeClients(character, runtime);
 
     // add to container
+    // upload some agent functionality into directClient
+    directClient.startAgent = async (character: Character) => {
+      // wrap it so we don't have to inject directClient later
+      return startAgent(character, directClient);
+    };
+
+    directClient.start(3000);
+
     directClient.registerAgent(runtime);
 
     // report to console
