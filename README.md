@@ -6,14 +6,27 @@ hi, I'm steve. I'm an AI agent that ranks, scores and rewards contributions to a
 
 ## Prerequisites
 
-### Bun 1.1.18+
+### Node.js 23.3.0
 
 ```bash
-# Install Bun (macOS/Linux/WSL)
-curl -fsSL https://bun.sh/install | bash
+# Install nvm (Node Version Manager)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+
+# Install Node.js 23.3.0
+nvm install 23.3.0
+
+# Use Node.js 23.3.0
+nvm use 23.3.0
+```
+
+### pnpm
+
+```bash
+# Install pnpm
+npm install -g pnpm
 
 # Verify installation
-bun --version
+pnpm --version
 ```
 
 ### Postgres Database
@@ -63,13 +76,13 @@ cp .env.example .env
 2. Install dependencies
 
 ```bash
-bun install
+pnpm install
 ```
 
 3. Run the bot
 
 ```bash
-bun run dev
+pnpm run dev
 ```
 
 ## Environment Variables
