@@ -76,7 +76,7 @@ bun run dev
 
 | Variable                 | Required | Description                                                                    |
 | ------------------------ | -------- | ------------------------------------------------------------------------------ |
-| `POSTGRES_URL`           | ✅       | Connection URL for your PostgreSQL database                                    |
+| `DATABASE_URL`           | ✅       | Connection URL for your PostgreSQL database                                    |
 | `POSTGRES_POOL_MIN`      | ❌       | Minimum number of connections in the database pool (recommended: 2)            |
 | `POSTGRES_POOL_MAX`      | ❌       | Maximum number of connections in the database pool (recommended: 10)           |
 | `OPENAI_API_KEY`         | ⚡       | OpenAI API key starting with 'sk-'. Required if using OpenAI as model provider |
@@ -249,7 +249,7 @@ This will:
 fly secrets set DISCORD_API_TOKEN="your-token"
 fly secrets set DISCORD_APPLICATION_ID="your-app-id"
 fly secrets set OPENAI_API_KEY="your-key"
-fly secrets set POSTGRES_URL="your-postgres-url"
+fly secrets set DATABASE_URL="your-postgres-url"
 # Set any other required environment variables
 ```
 

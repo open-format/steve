@@ -246,21 +246,23 @@ export class MessageManager {
         await this.runtime.messageManager.addEmbeddingToMemory(memory);
         await this.runtime.messageManager.createMemory(memory);
 
-        if (this.interestChannels[message.channelId]) {
-          // Add new message
-          this.interestChannels[message.channelId].messages.push({
-            userId: userIdUUID,
-            userName: userName,
-            content: content,
-          });
+        return;
 
-          // Trim to keep only recent messages
-          if (this.interestChannels[message.channelId].messages.length > MESSAGE_CONSTANTS.MAX_MESSAGES) {
-            this.interestChannels[message.channelId].messages = this.interestChannels[message.channelId].messages.slice(
-              -MESSAGE_CONSTANTS.MAX_MESSAGES
-            );
-          }
-        }
+        // if (this.interestChannels[message.channelId]) {
+        //   // Add new message
+        //   this.interestChannels[message.channelId].messages.push({
+        //     userId: userIdUUID,
+        //     userName: userName,
+        //     content: content,
+        //   });
+
+        //   // Trim to keep only recent messages
+        //   if (this.interestChannels[message.channelId].messages.length > MESSAGE_CONSTANTS.MAX_MESSAGES) {
+        //     this.interestChannels[message.channelId].messages = this.interestChannels[message.channelId].messages.slice(
+        //       -MESSAGE_CONSTANTS.MAX_MESSAGES
+        //     );
+        //   }
+        // }
       }
 
       let state = await this.runtime.composeState(userMessage, {

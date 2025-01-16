@@ -183,10 +183,10 @@ export function getTokenForProvider(provider: ModelProviderName, character: Char
 }
 
 function initializeDatabase() {
-  if (process.env.POSTGRES_URL) {
+  if (process.env.DATABASE_URL) {
     elizaLogger.info("Initializing PostgreSQL connection...");
     const db = new PostgresDatabaseAdapter({
-      connectionString: process.env.POSTGRES_URL,
+      connectionString: process.env.DATABASE_URL,
       parseInputs: true,
     });
 
