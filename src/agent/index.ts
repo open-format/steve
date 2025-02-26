@@ -333,7 +333,8 @@ async function startAgent(character: Character, directClient: DirectClient): Pro
       return startAgent(character, directClient);
     };
 
-    directClient.start(3000);
+    // @DEV: Temporarily disable directClient until we have a use case
+    // directClient.start(3000);
 
     directClient.registerAgent(runtime);
 
