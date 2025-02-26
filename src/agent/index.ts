@@ -24,6 +24,7 @@ import {
   stringToUuid,
   validateCharacterConfig,
 } from "@elizaos/core";
+import { TelegramClientInterface } from "../clients/telegram";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
@@ -214,6 +215,11 @@ export async function initializeClients(character: Character, runtime: IAgentRun
   if (clientTypes.includes(Clients.DISCORD)) {
     const discordClient = await DiscordClientInterface.start(runtime);
     if (discordClient) clients.discord = discordClient;
+  }
+
+  if (clientTypes.includes(Clients.TELEGRAM)) {
+    const telegramClient = await TelegramClientInterface.start(runtime);
+    if (telegramClient) clients.telegram = telegramClient;
   }
 
   elizaLogger.log("client keys", Object.keys(clients));
