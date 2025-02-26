@@ -82,6 +82,8 @@ export class MessageManager {
       const content: Content = {
         text: messageText,
         source: "telegram",
+        thread_id: message?.message_thread_id ?? 0,
+        server_id: ctx.chat?.id.toString() ?? "",
         inReplyTo:
           "reply_to_message" in message && message.reply_to_message
             ? stringToUuid(`${message.reply_to_message.message_id}-${this.runtime.agentId}`)
