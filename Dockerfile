@@ -22,12 +22,12 @@ RUN apt-get update -qq && \
 RUN npm install -g pnpm
 
 # Install node modules using pnpm
-COPY pnpm-lock.yaml ./
-COPY package.json ./
+COPY --link pnpm-lock.yaml ./
+COPY --link package.json ./
 RUN pnpm install --frozen-lockfile
 
 # Copy application code
-COPY . .
+COPY --link . .
 
 # Final stage for app image
 FROM base
